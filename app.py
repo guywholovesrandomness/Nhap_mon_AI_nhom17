@@ -86,100 +86,7 @@ def haversine_calc(lat1, lon1, lat2, lon2):
     a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-def interpolate_point(lat1, lon1, lat2, lon2, fraction):
-    lat = lat1 + (lat2 - lat1) * fraction
-    lon = lon1 + (lon2 - lon1) * fraction
-    return lat, lon
 
-def densify_graph(graph, interval_meters=3.0):
-
-    print(f"Đang làm dày graph với khoảng cách {interval_meters}m giữa các nodes...")
-    
-    edges_to_process = list(graph.edges(keys=True, data=True))
-    edges_to_remove = []
-    edges_to_add = []
-    nodes_to_add = {}
-    
-
-    max_node_id = max([n for n in graph.nodes() if isinstance(n, int)], default=0)
-    new_node_counter = max_node_id + 1
-    
-    for u, v, key, data in edges_to_process:
-
-        lat1 = graph.nodes[u]['y']
-        lon1 = graph.nodes[u]['x']
-        lat2 = graph.nodes[v]['y']
-        lon2 = graph.nodes[v]['x']
-
-        edge_length = data.get('length', haversine_calc(lat1, lon1, lat2, lon2))
-        
-
-        if edge_length <= interval_meters:
-            continue
-        
-
-        num_segments = int(math.ceil(edge_length / interval_meters))
-        
-        if num_segments <= 1:
-            continue
-        
-
-        segment_nodes = [u]
-        
-
-        for i in range(1, num_segments):
-            fraction = i / num_segments
-            lat_new, lon_new = interpolate_point(lat1, lon1, lat2, lon2, fraction)
-            
-
-            new_node_id = new_node_counter
-            new_node_counter += 1
-            
-
-            nodes_to_add[new_node_id] = {'y': lat_new, 'x': lon_new}
-            segment_nodes.append(new_node_id)
-        
-        segment_nodes.append(v)
-
-        segment_length = edge_length / num_segments
-        
-        for i in range(len(segment_nodes) - 1):
-            node_a = segment_nodes[i]
-            node_b = segment_nodes[i + 1]
-            
-
-            new_edge_data = data.copy()
-            new_edge_data['length'] = segment_length
-            
-
-            if 'geometry' in new_edge_data:
-                del new_edge_data['geometry']
-            
-            edges_to_add.append((node_a, node_b, new_edge_data))
-        
-  
-        edges_to_remove.append((u, v, key))
-    
-
-    print(f"Đang thêm {len(nodes_to_add)} nodes mới...")
-    for node_id, node_data in nodes_to_add.items():
-        graph.add_node(node_id, **node_data)
-    
-    # Xóa edges cũ
-    print(f"Đang xóa {len(edges_to_remove)} edges cũ...")
-    graph.remove_edges_from(edges_to_remove)
-    
-    # Thêm edges mới
-    print(f"Đang thêm {len(edges_to_add)} edges mới...")
-    for u, v, data in edges_to_add:
-        graph.add_edge(u, v, **data)
-    
-    print(f"Hoàn thành! Graph hiện có {len(graph.nodes)} nodes và {len(graph.edges)} edges.")
-    return graph
-
-G_old = G.copy()
-print("-> Đang làm dày graph...")
-G = densify_graph(G, interval_meters=3.0)
 
 print("-> Đang tạo lớp bản đồ cho ô tô...")
 G_car = G.copy()
@@ -368,8 +275,12 @@ def find_path_api():
 
     try:
 
-        start_node = ox.distance.nearest_nodes(G, start['lng'], start['lat'])
-        end_node = ox.distance.nearest_nodes(G, end['lng'], end['lat'])
+        start_node, start_dist = ox.distance.nearest_nodes(G, start['lng'], start['lat'],return_dist=True)
+        end_node, end_dist = ox.distance.nearest_nodes(G, end['lng'], end['lat'],return_dist=True)
+        MAX_DIST = 200
+        if start_dist > MAX_DIST or end_dist > MAX_DIST:
+            return jsonify({"status": "error", "message": "Khu vực tìm kiếm nằm ngoài phường Tương Mai"}), 404
+
         
         full_path_coords = [] 
         total_dist = 0
@@ -454,7 +365,7 @@ def find_path_api():
 @app.route('/api/all-nodes', methods=['GET'])
 def get_all_nodes():
     nodes = []
-    for n, data in G_old.nodes(data=True):
+    for n, data in G.nodes(data=True):
         nodes.append([data['y'], data['x']])
     return jsonify({"status": "success", "count": len(nodes), "nodes": nodes})
 
