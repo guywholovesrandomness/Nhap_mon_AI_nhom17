@@ -8,3 +8,5 @@ pip install osmnx networkx flask flask-cors
 Cách chạy chương trình:
   1. Chạy file app.py
   2. Chạy file index1.html trên trình duyệt mà bạn muốn(chrome, edge, ...)
+## 🎥 Video Demo
+[Xem Demo và hướng dẫn chạy ở đây](https://www.youtube.com/watch?v=AGxT8d2hExs)
