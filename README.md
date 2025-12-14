@@ -6,6 +6,5 @@ Bài tập project Nhập môn AI nhóm 17
 pip install osmnx networkx flask flask-cors
 
 Cách chạy chương trình:
-
-  Chạy file app.py
-  Chạy file index1.html trên trình duyệt mà bạn muốn(chrome, edge, ...)
+  1.Chạy file app.py
+  2.Chạy file index1.html trên trình duyệt mà bạn muốn(chrome, edge, ...)
