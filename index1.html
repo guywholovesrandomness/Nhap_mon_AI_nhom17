@@ -29,7 +29,7 @@
         .btn-reset { background: #6c757d; color: white; width: 100%; margin-top: 5px; }
         .btn-visual { background: #20c997; color: white; width: 100%; margin-top: 5px; }
         
-        /* Mode Buttons Toggle */
+
         .mode-group { display: flex; gap: 2px; margin-top: 5px; }
         .mode-btn { flex: 1; border: 1px solid #ccc; background: #fff; color: #333; font-size: 11px; padding: 6px 2px;}
         .mode-btn.active-route { background: #28a745; color: white; border-color: #28a745; }
@@ -141,13 +141,13 @@
             popupAnchor: [1, -34]
         });
 
-        // Biến chọn đoạn tắc đường & đường cấm
+
         let trafficStartLL = null, trafficEndLL = null;
         let trafficStartMarker = null, trafficEndMarker = null;
         let forbiddenStartLL = null, forbiddenEndLL = null;
         let forbiddenStartMarker = null, forbiddenEndMarker = null;
 
-        // --- MAP CLICK ---
+
         map.on('click', e => {
             if (mode === 'route') {
                 if (pathLayer) resetAll();
@@ -165,7 +165,7 @@
             }
         });
 
-        // --- LOGIC CHÍNH ---
+
         function setPt(type, ll, label) {
             const elCoord = document.getElementById(type+'Coord');
             const elAddr = document.getElementById(type+'Addr');
@@ -188,9 +188,9 @@
 async function findPath() {
     if (!startLL || !endLL) return;
     
-    // [MỚI] Lấy giá trị phương tiện
+
     const vType = document.getElementById('vehicleType').value;
-    const statusEl = document.getElementById('status'); // Đảm bảo biến này tồn tại
+    const statusEl = document.getElementById('status'); 
     
     statusEl.innerText = "Đang tính toán...";
     if (typeof pathLayer !== 'undefined' && pathLayer) map.removeLayer(pathLayer);
@@ -202,7 +202,7 @@ async function findPath() {
             body: JSON.stringify({
                 start: startLL,
                 end: endLL,
-                vehicle: vType // [MỚI] Gửi loại xe
+                vehicle: vType 
             })
         });
         
@@ -211,13 +211,13 @@ async function findPath() {
             
             if (pathLayer) map.removeLayer(pathLayer); 
 
-            // [CẬP NHẬT] XỬ LÝ RIÊNG CHO Ô TÔ (Nét đứt cho đi bộ, Nét liền cho lái xe)
+
             if (vType === 'car') {
                 const color = 'blue';
                 const dashStyle = {color: color, weight: 5, opacity: 0.7, dashArray: '10, 10'}; // Nét đứt cho đi bộ
                 const solidStyle = {color: color, weight: 5, opacity: 0.9}; // Nét liền cho lái xe
 
-                // pathLayer sẽ là LayerGroup để chứa 3 đường
+
                 pathLayer = L.layerGroup(); 
 
                 // 1. Vẽ đoạn đi bộ đầu (nét đứt)
@@ -237,12 +237,11 @@ async function findPath() {
 
                 pathLayer.addTo(map);
             } else {
-                // Xử lý cho xe máy / đi bộ (Đã thống nhất màu)
-                let color = 'lime'; // SỬ DỤNG MÀU XANH DƯƠNG CHO TẤT CẢ
+                // Xử lý cho xe máy / đi bộ 
+                let color = 'lime'; 
                 pathLayer = L.polyline(data.path, {color: color, weight: 5}).addTo(map);
             }
             
-            // FIX: Đảm bảo map.fitBounds() không bị lỗi nếu pathLayer không hợp lệ
             if (pathLayer) {
                 try {
                     const bounds = pathLayer.getBounds();
@@ -254,7 +253,7 @@ async function findPath() {
                 }
             }
             
-            // HIỂN THỊ KẾT QUẢ
+
             let msg = `✅ Xong!\n⏱️ Thời gian: ${data.time} phút\n📏 Quãng đường: ${(data.distance/1000).toFixed(2)} km`;
             if(data.details && data.details.length > 0) {
                 msg += `\n---\n${data.details.join('\n')}`;
@@ -269,17 +268,16 @@ async function findPath() {
     }
 }
 async function showSafeRoads() {
-    // 1. Tự động lấy giá trị từ ô input và gửi lên server trước
+
     const rainVal = document.getElementById('rainInput').value;
-    
-    // Gửi cập nhật mưa (âm thầm)
+
     await fetch('http://localhost:5000/api/set-rain', {
         method: 'POST', 
         headers: {'Content-Type':'application/json'}, 
         body: JSON.stringify({rain: rainVal})
     });
     
-    // 2. Sau đó mới lấy dữ liệu đường ngập
+
     if (showNodesChk.checked) {
         showNodesChk.checked = false;
         nodesLayer.clearLayers();
@@ -290,18 +288,18 @@ async function showSafeRoads() {
         const res = await fetch('http://localhost:5000/api/safe-roads');
         const d = await res.json();
 
-        safeRoadsLayer.clearLayers(); // Xóa sạch vẽ cũ
+        safeRoadsLayer.clearLayers(); 
 
         const flooded = d.flooded_roads || [];
         
-        // Nếu không có đường ngập
+
         if (flooded.length === 0) {
             statusEl.textContent = "✅ Không có đường nào bị ngập với lượng mưa này.";
             statusEl.style.color = "green";
             return;
         }
 
-        // Vẽ đường ngập
+
         const allLatLngs = [];
         flooded.forEach(line => {
             L.polyline(line, {
@@ -325,7 +323,6 @@ async function showSafeRoads() {
     }
 }
 
-        // --- FORBIDDEN & TRAFFIC ---
         function setMode(m) {
             mode = m;
             document.getElementById('btnRoute').className = m==='route'?'mode-btn active-route':'mode-btn';
@@ -363,40 +360,37 @@ async function showSafeRoads() {
             }
         }
         function resetAll() {
-            // 1. Xóa các điểm trên bản đồ
+
             if (startMarker) { map.removeLayer(startMarker); startMarker = null; }
             if (endMarker) { map.removeLayer(endMarker); endMarker = null; }
             
-            // 2. Xóa đường đi (kiểm tra kỹ để không lỗi)
+
             if (pathLayer) { 
                 map.removeLayer(pathLayer); 
                 pathLayer = null; 
             }
             
-            // 3. Reset các biến tọa độ
+
             startLL = null; 
             endLL = null;
-            
-            // 4. Xóa chữ trong các ô nhập liệu
+
             document.getElementById('startAddr').value = "";
             document.getElementById('endAddr').value = "";
             document.getElementById('startCoord').innerText = "Chưa chọn";
             document.getElementById('endCoord').innerText = "Chưa chọn";
             
-            // 5. Reset ô chọn xe về mặc định (Xe máy)
+
             const vehicleSelect = document.getElementById('vehicleType');
             if(vehicleSelect) vehicleSelect.value = "motorbike"; 
 
-            // 6. Ẩn bảng kết quả và reset trạng thái
             const resultBox = document.getElementById('resultBox'); 
             if(resultBox) resultBox.style.display = 'none';
             
             document.getElementById('status').innerText = "Sẵn sàng.";
-            
-            // 7. Kiểm tra lại nút Tìm đường (để disable nó)
+
             findBtn.disabled = true;
         }
-        // --- TẮC ĐƯỜNG THEO ĐOẠN ---
+
         function handleTrafficClick(ll) {
             if (!trafficStartLL) {
                 trafficStartLL = ll;
@@ -415,7 +409,7 @@ async function showSafeRoads() {
                     .openPopup();
                 addTrafficSegment();
             } else {
-                // Nếu đã chọn đủ 2 điểm rồi mà vẫn click tiếp -> reset chọn mới
+
                 if (trafficStartMarker) trafficLayer.removeLayer(trafficStartMarker);
                 if (trafficEndMarker) trafficLayer.removeLayer(trafficEndMarker);
                 
@@ -457,7 +451,7 @@ async function showSafeRoads() {
                 console.error(e);
                 statusEl.textContent = "Lỗi kết nối server khi thêm đoạn tắc.";
             } finally {
-                // Xóa pin tạm thời sau khi xử lý xong
+
                 if (trafficStartMarker) trafficLayer.removeLayer(trafficStartMarker);
                 if (trafficEndMarker) trafficLayer.removeLayer(trafficEndMarker);
                 
@@ -468,7 +462,7 @@ async function showSafeRoads() {
             }
         }
 
-        // --- ĐƯỜNG CẤM THEO ĐOẠN ---
+
         function handleForbiddenClick(ll) {
             if (!forbiddenStartLL) {
                 forbiddenStartLL = ll;
@@ -487,7 +481,7 @@ async function showSafeRoads() {
                     .openPopup();
                 addForbiddenSegment();
             } else {
-                // Nếu đã chọn đủ 2 điểm rồi mà vẫn click tiếp -> reset chọn mới
+
                 if (forbiddenStartMarker) forbiddenLayer.removeLayer(forbiddenStartMarker);
                 if (forbiddenEndMarker) forbiddenLayer.removeLayer(forbiddenEndMarker);
 
@@ -525,7 +519,7 @@ async function showSafeRoads() {
                 console.error(e);
                 statusEl.textContent = "Lỗi kết nối server khi thêm đường cấm.";
             } finally {
-                // Xóa pin tạm thời sau khi xử lý xong
+
                 if (forbiddenStartMarker) forbiddenLayer.removeLayer(forbiddenStartMarker);
                 if (forbiddenEndMarker) forbiddenLayer.removeLayer(forbiddenEndMarker);
                 
@@ -536,7 +530,7 @@ async function showSafeRoads() {
             }
         }
 
-        // --- CÁC HÀM KHÁC ---
+
         async function setRain() {
             const r = document.getElementById('rainInput').value;
             await fetch('http://localhost:5000/api/set-rain', {
@@ -560,15 +554,14 @@ async function showSafeRoads() {
 
         showNodesChk.addEventListener('change', async function() {
             if(this.checked) {
-                safeRoadsLayer.clearLayers(); // Tắt SafeRoads nếu bật Node cho đỡ rối
+                safeRoadsLayer.clearLayers(); 
                 const res = await fetch('http://localhost:5000/api/all-nodes');
                 const d = await res.json();
                 d.nodes.forEach(n => L.circleMarker(n, {radius:2, color:'blue', opacity:0.3}).addTo(nodesLayer));
                 nodesLayer.addTo(map);
             } else nodesLayer.clearLayers();
         });
-        
-        // Khởi tạo chế độ mặc định
+
         setMode('route'); 
     </script>
 </body>

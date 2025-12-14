@@ -68,11 +68,15 @@ def calculate_path_time(G_graph, path, speed_ms):
     return total_len, (total_weighted_len / speed_ms) / 60
 
 
-print("-> Đang tạo lớp bản đồ cho ô tô...")
-G_car = G.copy()
-remove_edges = [(u, v, k) for u, v, k, d in G_car.edges(keys=True, data=True) if not is_car_allowed(d)]
-G_car.remove_edges_from(remove_edges)
-G_car.remove_nodes_from(list(nx.isolates(G_car)))
+def is_node_forbidden(node_lat, node_lng):
+    if not FORBIDDEN_DATA:
+        return False
+    radius = 15 
+    for zone in FORBIDDEN_DATA:
+        if haversine_calc(node_lat, node_lng, zone['lat'], zone['lng']) <= radius:
+            return True
+    return False
+
 
 def haversine_calc(lat1, lon1, lat2, lon2):
     R = 6371000 
@@ -82,15 +86,106 @@ def haversine_calc(lat1, lon1, lat2, lon2):
     a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+def interpolate_point(lat1, lon1, lat2, lon2, fraction):
+    lat = lat1 + (lat2 - lat1) * fraction
+    lon = lon1 + (lon2 - lon1) * fraction
+    return lat, lon
 
-def is_node_forbidden(node_lat, node_lng):
-    if not FORBIDDEN_DATA:
-        return False
-    radius = 15 
-    for zone in FORBIDDEN_DATA:
-        if haversine_calc(node_lat, node_lng, zone['lat'], zone['lng']) <= radius:
-            return True
-    return False
+def densify_graph(graph, interval_meters=3.0):
+
+    print(f"Đang làm dày graph với khoảng cách {interval_meters}m giữa các nodes...")
+    
+    edges_to_process = list(graph.edges(keys=True, data=True))
+    edges_to_remove = []
+    edges_to_add = []
+    nodes_to_add = {}
+    
+
+    max_node_id = max([n for n in graph.nodes() if isinstance(n, int)], default=0)
+    new_node_counter = max_node_id + 1
+    
+    for u, v, key, data in edges_to_process:
+
+        lat1 = graph.nodes[u]['y']
+        lon1 = graph.nodes[u]['x']
+        lat2 = graph.nodes[v]['y']
+        lon2 = graph.nodes[v]['x']
+
+        edge_length = data.get('length', haversine_calc(lat1, lon1, lat2, lon2))
+        
+
+        if edge_length <= interval_meters:
+            continue
+        
+
+        num_segments = int(math.ceil(edge_length / interval_meters))
+        
+        if num_segments <= 1:
+            continue
+        
+
+        segment_nodes = [u]
+        
+
+        for i in range(1, num_segments):
+            fraction = i / num_segments
+            lat_new, lon_new = interpolate_point(lat1, lon1, lat2, lon2, fraction)
+            
+
+            new_node_id = new_node_counter
+            new_node_counter += 1
+            
+
+            nodes_to_add[new_node_id] = {'y': lat_new, 'x': lon_new}
+            segment_nodes.append(new_node_id)
+        
+        segment_nodes.append(v)
+
+        segment_length = edge_length / num_segments
+        
+        for i in range(len(segment_nodes) - 1):
+            node_a = segment_nodes[i]
+            node_b = segment_nodes[i + 1]
+            
+
+            new_edge_data = data.copy()
+            new_edge_data['length'] = segment_length
+            
+
+            if 'geometry' in new_edge_data:
+                del new_edge_data['geometry']
+            
+            edges_to_add.append((node_a, node_b, new_edge_data))
+        
+  
+        edges_to_remove.append((u, v, key))
+    
+
+    print(f"Đang thêm {len(nodes_to_add)} nodes mới...")
+    for node_id, node_data in nodes_to_add.items():
+        graph.add_node(node_id, **node_data)
+    
+    # Xóa edges cũ
+    print(f"Đang xóa {len(edges_to_remove)} edges cũ...")
+    graph.remove_edges_from(edges_to_remove)
+    
+    # Thêm edges mới
+    print(f"Đang thêm {len(edges_to_add)} edges mới...")
+    for u, v, data in edges_to_add:
+        graph.add_edge(u, v, **data)
+    
+    print(f"Hoàn thành! Graph hiện có {len(graph.nodes)} nodes và {len(graph.edges)} edges.")
+    return graph
+
+G_old = G.copy()
+print("-> Đang làm dày graph...")
+G = densify_graph(G, interval_meters=3.0)
+
+print("-> Đang tạo lớp bản đồ cho ô tô...")
+G_car = G.copy()
+remove_edges = [(u, v, k) for u, v, k, d in G_car.edges(keys=True, data=True) if not is_car_allowed(d)]
+G_car.remove_edges_from(remove_edges)
+G_car.remove_nodes_from(list(nx.isolates(G_car)))
 
 def get_road_width(edge_data):
     
@@ -164,15 +259,6 @@ def parse_linestring(wkt_str):
     except Exception:
         return []
 
-def project_point_to_edge(point, edge_geom):
-    min_dist = float('inf')
-    proj_point = None
-    for p in edge_geom:
-        dist = (p[0] - point[0])**2 + (p[1] - point[1])**2
-        if dist < min_dist:
-            min_dist = dist
-            proj_point = p
-    return proj_point
 
 def find_nearest_edge(lat, lng):
     try:
@@ -245,29 +331,6 @@ def a_star(graph, start, goal):
         curr = came_from[curr]
     path.reverse()
     return path
-def add_temp_node(graph, lat, lng, edge):
-    u, v, key = edge
-    temp_id = f"temp_{lat}_{lng}"
-    if graph.has_node(temp_id):
-        return temp_id
-
-    graph.add_node(temp_id, y=lat, x=lng)
-    
-    if key in graph[u][v]:
-        original_data = graph[u][v][key].copy()
-    else:
-        original_data = {'length': 100, 'highway': 'residential'}
-        
-    dist_total = float(original_data.get('length', 100))
-    original_data['length'] = dist_total / 2
-    
-    graph.add_edge(u, temp_id, **original_data)
-    graph.add_edge(temp_id, v, **original_data)
-    if not original_data.get('oneway', False):
-        graph.add_edge(temp_id, u, **original_data)
-        graph.add_edge(v, temp_id, **original_data)
-        
-    return temp_id
 
 def choose_closest_node(lat, lng, u, v):
     du = haversine_calc(lat, lng, G.nodes[u]['y'], G.nodes[u]['x'])
@@ -277,7 +340,7 @@ def choose_closest_node(lat, lng, u, v):
 def build_path_coords(graph, nodes):
     return [(graph.nodes[n]["y"], graph.nodes[n]["x"]) for n in nodes if graph.has_node(n)]
 
-def mark_traffic_on_path(path_nodes, level):
+def mark_traffic_on_path(G, path_nodes, level):
     factor = float(TRAFFIC_LEVELS.get(level, 1.2))
     for i in range(len(path_nodes) - 1):
         u = path_nodes[i]
@@ -320,21 +383,20 @@ def find_path_api():
             except:
                 return jsonify({"status": "error", "message": "Không tìm thấy đường ô tô gần đó"}), 404
 
-            
             path1 = []
             if start_node != car_start:
-                try: path1 = nx.shortest_path(G, start_node, car_start, weight='length')
+                try: path1 = a_star(G, start_node, car_start)
                 except: pass
             
             
             path2 = []
-            try: path2 = nx.shortest_path(G_car, car_start, car_end, weight='length')
+            try: path2 = a_star(G_car, car_start, car_end)
             except nx.NetworkXNoPath: return jsonify({"status": "error", "message": "Ô tô không đi được giữa 2 điểm này"}), 404
 
             
             path3 = []
             if car_end != end_node:
-                try: path3 = nx.shortest_path(G, car_end, end_node, weight='length')
+                try: path3 = a_star(G, car_end, end_node)
                 except: pass
 
             d1, t1 = calculate_path_time(G, path1, SPEEDS['walk'])
@@ -392,7 +454,7 @@ def find_path_api():
 @app.route('/api/all-nodes', methods=['GET'])
 def get_all_nodes():
     nodes = []
-    for n, data in G.nodes(data=True):
+    for n, data in G_old.nodes(data=True):
         nodes.append([data['y'], data['x']])
     return jsonify({"status": "success", "count": len(nodes), "nodes": nodes})
 
@@ -419,8 +481,8 @@ def add_traffic_segment():
         if not path_nodes:
             return jsonify({"status": "error", "message": "Không tìm được đoạn đường giữa 2 điểm."}), 404
 
-        mark_traffic_on_path(path_nodes, level)
-        
+        mark_traffic_on_path(G,path_nodes, level)
+        mark_traffic_on_path(G_car,path_nodes, level)
         for u, v in zip(path_nodes[:-1], path_nodes[1:]):
             if G_car.has_edge(u, v):
                 
